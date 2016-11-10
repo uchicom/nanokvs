@@ -564,6 +564,7 @@ public class MailConnection implements Connection {
 	}
 
 	/**
+	 * 挿入処理.
 	 *
 	 * @param box
 	 * @param json
@@ -638,6 +639,14 @@ public class MailConnection implements Connection {
 		return 1;
 	}
 
+	/**
+	 * 削除処理.
+	 *
+	 * @param box
+	 * @param json
+	 * @return
+	 * @throws SQLException
+	 */
 	public int delete(String box, String json) throws SQLException {
 		logger.info("delete " + box + " " + json);
 		int deleteCount = 0;
@@ -645,54 +654,13 @@ public class MailConnection implements Connection {
 		try {
 			String value = null;
 			if (pop3Socket == null || !pop3Socket.isConnected() || pop3Socket.isClosed()) {
-				pop3Socket = createSocket(pop3Host, pop3Port, "true".equals(info.getProperty("pop3.ssl")));
-				pop3Ps = new PrintStream(pop3Socket.getOutputStream());
-				pop3Br = new BufferedReader(new InputStreamReader(
-						pop3Socket.getInputStream()));
-				value = pop3Br.readLine();
-				logger.info(value);
-				writeclf(pop3Ps, "USER " + info.getProperty("pop3.user"));
-				value = pop3Br.readLine();
-				logger.info(value);
-				writeclf(pop3Ps, "PASS " + info.getProperty("pop3.pass"));
-				value = pop3Br.readLine();
-				logger.info(value);
-				boxMap.clear();
+				initPop3();
+				List<Msg> msgList = createMsgList();
 
-				writeclf(pop3Ps, "UIDL");
-				value = pop3Br.readLine();
-				logger.info(value); //+OK
-				List<Msg> msgList = new ArrayList<>();
-				while (!".".equals(value = pop3Br.readLine())) {
-					String[] values = value.split(" ");
-					msgList.add(new Msg(Integer.parseInt(value.split(" ")[0]), values[1]));
-				}
-
-				if (msgList.isEmpty()) return 0;
+				if (msgList.isEmpty())
+					return 0;
 				//headerを調べてboxを抽出
-				for (Msg msg : msgList) {
-					writeclf(pop3Ps, "TOP " + msg.getNum() + " 0");
-					while (!(value = pop3Br.readLine()).equals(".")) {
-						if (value.startsWith("Subject: ")) {
-							String[] keyBoxs = value.substring(9).split(" ", 2);
-							if (pop3Db == null || "".equals(pop3Db)) {
-								if (keyBoxs.length > 1) continue;
-							} else {
-								if (keyBoxs.length < 2) continue;
-								if (!pop3Db.equals(keyBoxs[1])) continue;
-							}
-							String keyBox = keyBoxs[0];
-							List<Msg> objectList = null;
-							if (boxMap.containsKey(keyBox)) {
-								objectList = boxMap.get(keyBox);
-							} else {
-								objectList = new ArrayList<>();
-								boxMap.put(keyBox, objectList);
-							}
-							objectList.add(msg);
-						}
-					}
-				}
+				createBoxMap(msgList);
 			}
 
 			logger.info(boxMap.toString());
@@ -701,34 +669,8 @@ public class MailConnection implements Connection {
 				//boxが存在する
 				List<Msg> retrList = boxMap.get(box);
 				for (Msg msg : retrList) {
-					writeclf(pop3Ps, "RETR " + msg.getNum());
-					boolean body = false;
-					Map<String, String> keyValueMap = new LinkedHashMap<>();
-					while (!".".equals(value = pop3Br.readLine())) {
-						if ("".equals(value)) {
-							body = true;
-						} else if (body) {
-							String[] keyValue = value.split(":", 2);
-							if (keyValue.length > 1) {
-								keyValueMap.put(keyValue[0], keyValue[1]);
-							} else {
-								keyValueMap.put(keyValue[0], null);
-							}
-						}
-					}
-					boolean check = true;
-					for (String keyValue : keyValues) {
-						String[] keyValueArray = keyValue.split(":");
-						if (keyValueArray.length > 1) {
-							String conditionValue = keyValueMap.get(keyValueArray[0]);
-							if (!keyValueArray[1].equals(conditionValue)) {
-								logger.info(keyValueArray[1] + "!=" + conditionValue);
-								check = false;
-								break;
-							}
-						}
-					}
-					if (check) {
+					Map<String, String> keyValueMap = createKeyValueMap(msg.getNum());
+					if (equalsKeyValues(keyValues, keyValueMap)) {
 						//一致する場合は削除
 						writeclf(pop3Ps, "DELE " + msg.getNum());
 						value = pop3Br.readLine();
@@ -749,7 +691,7 @@ public class MailConnection implements Connection {
 	}
 
 	/**
-	 * jsonの検索条件は未実装
+	 * 検索処理.
 	 *
 	 * @param box
 	 * @param json
@@ -758,59 +700,15 @@ public class MailConnection implements Connection {
 	 */
 	public List<Map<String, String>> select(String box, String json) throws SQLException {
 		logger.info(json);
-		//接続開始後の最初の一回はboxのtopを実施してmap(box名,mailNoList)を保持する。
-		//Connection接続中はdelete,selectはこのデータを参照する。
 		List<Map<String, String>> resultList = null;
 		try {
-			String value = null;
 			if (pop3Socket == null || !pop3Socket.isConnected() || pop3Socket.isClosed()) {
-				pop3Socket = createSocket(pop3Host, pop3Port, "true".equals(info.getProperty("pop3.ssl")));
-				pop3Ps = new PrintStream(pop3Socket.getOutputStream());
-				pop3Br = new BufferedReader(new InputStreamReader(
-						pop3Socket.getInputStream()));
-				value = pop3Br.readLine();
-				logger.info(value);
-				writeclf(pop3Ps, "USER " + info.getProperty("pop3.user"));
-				value = pop3Br.readLine();
-				logger.info(value);
-				writeclf(pop3Ps, "PASS " + info.getProperty("pop3.pass"));
-				value = pop3Br.readLine();
-				logger.info(value);
-				boxMap.clear();
-				writeclf(pop3Ps, "UIDL");
-				value = pop3Br.readLine();
-				logger.info(value); //+OK
-				List<Msg> msgList = new ArrayList<>();
-				while (!".".equals(value = pop3Br.readLine())) {
-					String[] values = value.split(" ");
-					msgList.add(new Msg(Integer.parseInt(value.split(" ")[0]), values[1]));
-				}
-
-				if (msgList.isEmpty()) return new ArrayList<>();
+				initPop3();
+				List<Msg> msgList = createMsgList();
+				if (msgList.isEmpty())
+					return new ArrayList<>();
 				//headerを調べてboxを抽出
-				for (Msg msg : msgList) {
-					writeclf(pop3Ps, "TOP " + msg.getNum() + " 0");
-					while (!(value = pop3Br.readLine()).equals(".")) {
-						if (value.startsWith("Subject: ")) {
-							String[] keyBoxs = value.substring(9).split(" ", 2);
-							if (pop3Db == null || "".equals(pop3Db)) {
-								if (keyBoxs.length > 1) continue;
-							} else {
-								if (keyBoxs.length < 2) continue;
-								if (!pop3Db.equals(keyBoxs[1])) continue;
-							}
-							String keyBox = keyBoxs[0];
-							List<Msg> objectList = null;
-							if (boxMap.containsKey(keyBox)) {
-								objectList = boxMap.get(keyBox);
-							} else {
-								objectList = new ArrayList<>();
-								boxMap.put(keyBox, objectList);
-							}
-							objectList.add(msg);
-						}
-					}
-				}
+				createBoxMap(msgList);
 			}
 			logger.info(boxMap.toString());
 			if (boxMap.containsKey(box)) {
@@ -819,33 +717,8 @@ public class MailConnection implements Connection {
 				List<Msg> retrList = boxMap.get(box);
 				resultList = new ArrayList<>(retrList.size());
 				for (Msg msg : retrList) {
-					writeclf(pop3Ps, "RETR " + msg.getNum());
-					boolean body = false;
-					Map<String, String> keyValueMap = new LinkedHashMap<>();
-					while (!".".equals(value = pop3Br.readLine())) {
-						if ("".equals(value)) {
-							body = true;
-						} else if (body) {
-							String[] keyValue = value.split(":", 2);
-							if (keyValue.length > 1) {
-								keyValueMap.put(keyValue[0], keyValue[1]);
-							} else {
-								keyValueMap.put(keyValue[0], null);
-							}
-						}
-					}
-					boolean check = true;
-					for (String keyValue : keyValues) {
-						String[] keyValueArray = keyValue.split(":");
-						if (keyValueArray.length > 1) {
-							String conditionValue = keyValueMap.get(keyValueArray[0]);
-							if (!keyValueArray[1].equals(conditionValue)) {
-								check = false;
-								break;
-							}
-						}
-					}
-					if (check) {
+					Map<String, String> keyValueMap = createKeyValueMap(msg.getNum());
+					if (equalsKeyValues(keyValues, keyValueMap)) {
 						resultList.add(keyValueMap);
 					}
 				}
@@ -863,18 +736,163 @@ public class MailConnection implements Connection {
 		return resultList;
 	}
 
+	/**
+	 * \r\nの改行付きで出力します.
+	 * @param ps
+	 * @param value
+	 * @throws IOException
+	 */
 	private void writecl(PrintStream ps, String value) throws IOException {
 		ps.write(value.getBytes());
 		ps.write("\r\n".getBytes());
 	}
 
+	/**
+	 * \r\nの改行付きで出力し、フラッシュします.
+	 * @param ps
+	 * @param value
+	 * @throws IOException
+	 */
 	private void writeclf(PrintStream ps, String value) throws IOException {
 		writecl(ps, value);
 		ps.flush();
 	}
 
 	/**
+	 * POP3接続の初期化.
+	 * @throws Exception
+	 */
+	public void initPop3() throws Exception {
+		pop3Socket = createSocket(pop3Host, pop3Port, "true".equals(info.getProperty("pop3.ssl")));
+		pop3Ps = new PrintStream(pop3Socket.getOutputStream());
+		pop3Br = new BufferedReader(new InputStreamReader(
+				pop3Socket.getInputStream()));
+		String value = pop3Br.readLine();
+		logger.info(value);
+		pop3Login();
+		boxMap.clear();
+	}
+
+	/**
+	 * POP3のログイン処理.
+	 * @throws IOException
+	 */
+	public void pop3Login() throws IOException {
+		writeclf(pop3Ps, "USER " + info.getProperty("pop3.user"));
+		String value = pop3Br.readLine();
+		logger.info(value);
+		writeclf(pop3Ps, "PASS " + info.getProperty("pop3.pass"));
+		value = pop3Br.readLine();
+		logger.info(value);
+	}
+
+	/**
+	 * UIDLを使用してメッセージのリストを作成します.
+	 * @return
+	 * @throws IOException
+	 */
+	public List<Msg> createMsgList() throws IOException {
+		writeclf(pop3Ps, "UIDL");
+		String value = pop3Br.readLine();
+		logger.info(value); //+OK
+		List<Msg> msgList = new ArrayList<>();
+		while (!".".equals(value = pop3Br.readLine())) {
+			String[] values = value.split(" ");
+			msgList.add(new Msg(Integer.parseInt(value.split(" ")[0]), values[1]));
+		}
+		return msgList;
+	}
+
+	/**
+	 * メッセージのリストをもとにヘッダーを調べてBOXマップを作成します.
+	 *
+	 * @param msgList
+	 * @throws IOException
+	 */
+	public void createBoxMap(List<Msg> msgList) throws IOException {
+		//headerを調べてboxを抽出
+		for (Msg msg : msgList) {
+			writeclf(pop3Ps, "TOP " + msg.getNum() + " 0");
+			String value = null;
+			while (!(value = pop3Br.readLine()).equals(".")) {
+				if (value.startsWith("Subject: ")) {
+					String[] keyBoxs = value.substring(9).split(" ", 2);
+					if (pop3Db == null || "".equals(pop3Db)) {
+						if (keyBoxs.length > 1)
+							continue;
+					} else {
+						if (keyBoxs.length < 2)
+							continue;
+						if (!pop3Db.equals(keyBoxs[1]))
+							continue;
+					}
+					String keyBox = keyBoxs[0];
+					List<Msg> objectList = null;
+					if (boxMap.containsKey(keyBox)) {
+						objectList = boxMap.get(keyBox);
+					} else {
+						objectList = new ArrayList<>();
+						boxMap.put(keyBox, objectList);
+					}
+					objectList.add(msg);
+				}
+			}
+		}
+	}
+
+	/**
+	 * RETRを使用してKeyValueマップを作成します.
+	 *
+	 * @param msgNum
+	 * @return
+	 * @throws IOException
+	 */
+	public Map<String, String> createKeyValueMap(Integer msgNum) throws IOException {
+		writeclf(pop3Ps, "RETR " + msgNum);
+		boolean body = false;
+		String value = null;
+		Map<String, String> keyValueMap = new LinkedHashMap<>();
+		while (!".".equals(value = pop3Br.readLine())) {
+			if ("".equals(value)) {
+				body = true;
+			} else if (body) {
+				String[] keyValue = value.split(":", 2);
+				if (keyValue.length > 1) {
+					keyValueMap.put(keyValue[0], keyValue[1]);
+				} else {
+					keyValueMap.put(keyValue[0], null);
+				}
+			}
+		}
+		return keyValueMap;
+	}
+
+	/**
+	 * keyValueの値を比較します.
+	 *
+	 * @param keyValues
+	 * @param keyValueMap
+	 * @return
+	 */
+	public boolean equalsKeyValues(String[] keyValues, Map<String, String> keyValueMap) {
+		boolean check = true;
+		for (String keyValue : keyValues) {
+			String[] keyValueArray = keyValue.split(":");
+			if (keyValueArray.length > 1) {
+				String conditionValue = keyValueMap.get(keyValueArray[0]);
+				if (!keyValueArray[1].equals(conditionValue)) {
+					logger.info(keyValueArray[1] + "!=" + conditionValue);
+					check = false;
+					break;
+				}
+			}
+		}
+		return check;
+	}
+
+	/**
 	 * ソケットを生成します.
+	 *
 	 * @param host
 	 * @param port
 	 * @return
