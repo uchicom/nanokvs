@@ -569,7 +569,7 @@ public class MailConnection implements Connection {
 		System.out.println("insert " + box + " " + json);
 		try {
 			if (smtpSocket == null || !smtpSocket.isConnected() || smtpSocket.isClosed()) {
-				smtpSocket = createSocket(smtpHost, smtpPort, "true".equals(info.getProperty("pop3.ssl")));
+				smtpSocket = createSocket(smtpHost, smtpPort, "true".equals(info.getProperty("smtp.ssl")));
 			}
 
 			PrintStream ps = new PrintStream(smtpSocket.getOutputStream());
@@ -636,6 +636,7 @@ public class MailConnection implements Connection {
 		System.out.println("delete " + box + " " + json);
 		//削除
 		//UIDLで削除しに行こうとして、実際の削除の際にはUIDLで番号を見つけて削除する必要があるな。
+
 		return 0;
 	}
 
@@ -654,7 +655,7 @@ public class MailConnection implements Connection {
 		List<Map<String, String>> resultList = null;
 		try {
 			if (pop3Socket == null || !pop3Socket.isConnected() || pop3Socket.isClosed()) {
-				pop3Socket = createSocket(pop3Host, pop3Port, "true".equals(info.getProperty("smtp.ssl")));
+				pop3Socket = createSocket(pop3Host, pop3Port, "true".equals(info.getProperty("pop3.ssl")));
 			}
 
 			PrintStream ps = new PrintStream(pop3Socket.getOutputStream());
