@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executor;
@@ -613,7 +614,7 @@ public class MailConnection implements Connection {
 				writecl(ps, "Subject: " + box);
 			}
 			ZonedDateTime datetime = ZonedDateTime.now();
-			DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE, d MMM yyyy HH:mm:ss Z");
+			DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE, d MMM yyyy HH:mm:ss Z", Locale.ENGLISH);
 			writecl(ps, "Date: " + datetime.format(formatter));
 			writecl(ps, "Message-ID: <" + System.currentTimeMillis() + "@" + info.getProperty("smtp.domain") + ">");
 			writecl(ps, "");
