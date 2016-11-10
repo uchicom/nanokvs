@@ -32,4 +32,8 @@ public class Msg {
 	public void setUidl(String uidl) {
 		this.uidl = uidl;
 	}
+	@Override
+	public String toString() {
+		return num + uidl;
+	}
 }
