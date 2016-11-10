@@ -33,6 +33,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executor;
+import java.util.logging.Logger;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
@@ -45,6 +46,9 @@ import javax.net.ssl.SSLSocketFactory;
  *
  */
 public class MailConnection implements Connection {
+
+	/** ロガー */
+	private static final Logger logger = Logger.getLogger(MailConnection.class.getCanonicalName());
 
 	private Properties info;
 	//POP3情報
@@ -185,7 +189,7 @@ public class MailConnection implements Connection {
 			try {
 				if (!pop3Socket.isOutputShutdown()) {
 					writeclf(pop3Ps, "QUIT\r\n");
-					System.out.println("QUIT POP3!");
+					logger.info("QUIT POP3!");
 				}
 				pop3Socket.close();
 			} catch (IOException e) {
@@ -196,7 +200,7 @@ public class MailConnection implements Connection {
 			try {
 				if (!smtpSocket.isOutputShutdown()) {
 					writeclf(smtpPs, "QUIT\r\n");
-					System.out.println("QUIT SMTP!");
+					logger.info("QUIT SMTP!");
 				}
 				smtpSocket.close();
 			} catch (IOException e) {
@@ -204,7 +208,7 @@ public class MailConnection implements Connection {
 			}
 		}
 
-		System.out.println("CLOSE CONNECTION!");
+		logger.info("CLOSE CONNECTION!");
 	}
 
 	/* (非 Javadoc)
@@ -565,7 +569,7 @@ public class MailConnection implements Connection {
 	 * @param json
 	 */
 	public int insert(String box, String json) throws SQLException {
-		System.out.println("insert " + box + " " + json);
+		logger.info("insert " + box + " " + json);
 		try {
 			String value = null;
 			if (smtpSocket == null || !smtpSocket.isConnected() || smtpSocket.isClosed()) {
@@ -575,10 +579,10 @@ public class MailConnection implements Connection {
 						smtpSocket.getInputStream()));
 
 				value = smtpBr.readLine();
-				System.out.println(value);
+				logger.info(value);
 				writeclf(smtpPs, "HELO " + info.getProperty("smtp.helo"));
 				value = smtpBr.readLine();
-				System.out.println(value);
+				logger.info(value);
 
 				//SSL接続の場合
 				if (info.containsKey("smtp.auth")) {
@@ -586,7 +590,7 @@ public class MailConnection implements Connection {
 					case "plain":
 						writeclf(smtpPs, "AUTH PLAIN");
 						value = smtpBr.readLine();
-						System.out.println(value);
+						logger.info(value);
 						String smtpUser = info.getProperty("smtp.user");
 						String smtpPass = info.getProperty("smtp.pass");
 						writeclf(smtpPs,
@@ -595,19 +599,19 @@ public class MailConnection implements Connection {
 						break;
 					}
 					value = smtpBr.readLine();
-					System.out.println(value);
+					logger.info(value);
 				}
 			}
 
 			writeclf(smtpPs, "MAIL FROM: " + info.getProperty("smtp.mail_from"));
 			value = smtpBr.readLine();
-			System.out.println(value);
+			logger.info(value);
 			writeclf(smtpPs, "RCPT TO: " + info.getProperty("smtp.rcpt_to"));
 			value = smtpBr.readLine();
-			System.out.println(value);
+			logger.info(value);
 			writeclf(smtpPs, "DATA");
 			value = smtpBr.readLine();
-			System.out.println(value);
+			logger.info(value);
 			writecl(smtpPs, "From: " + info.getProperty("smtp.from"));
 			writecl(smtpPs, "To: " + info.getProperty("smtp.to"));
 			if (smtpDb != null && !"".equals(smtpDb)) {
@@ -625,7 +629,7 @@ public class MailConnection implements Connection {
 			}
 			writeclf(smtpPs, ".");
 			value = smtpBr.readLine();
-			System.out.println(value);
+			logger.info(value);
 		} catch (IOException e) {
 			throw new SQLException(e);
 		} catch (Exception e) {
@@ -635,7 +639,7 @@ public class MailConnection implements Connection {
 	}
 
 	public int delete(String box, String json) throws SQLException {
-		System.out.println("delete " + box + " " + json);
+		logger.info("delete " + box + " " + json);
 		int deleteCount = 0;
 		//削除
 		try {
@@ -646,18 +650,18 @@ public class MailConnection implements Connection {
 				pop3Br = new BufferedReader(new InputStreamReader(
 						pop3Socket.getInputStream()));
 				value = pop3Br.readLine();
-				System.out.println(value);
+				logger.info(value);
 				writeclf(pop3Ps, "USER " + info.getProperty("pop3.user"));
 				value = pop3Br.readLine();
-				System.out.println(value);
+				logger.info(value);
 				writeclf(pop3Ps, "PASS " + info.getProperty("pop3.pass"));
 				value = pop3Br.readLine();
-				System.out.println(value);
+				logger.info(value);
 				boxMap.clear();
 
 				writeclf(pop3Ps, "UIDL");
 				value = pop3Br.readLine();
-				System.out.println(value); //+OK
+				logger.info(value); //+OK
 				List<Msg> msgList = new ArrayList<>();
 				while (!".".equals(value = pop3Br.readLine())) {
 					String[] values = value.split(" ");
@@ -691,7 +695,7 @@ public class MailConnection implements Connection {
 				}
 			}
 
-			System.out.println(boxMap);
+			logger.info(boxMap.toString());
 			if (boxMap.containsKey(box)) {
 				String[] keyValues = json.split(",");
 				//boxが存在する
@@ -718,7 +722,7 @@ public class MailConnection implements Connection {
 						if (keyValueArray.length > 1) {
 							String conditionValue = keyValueMap.get(keyValueArray[0]);
 							if (!keyValueArray[1].equals(conditionValue)) {
-								System.out.println(keyValueArray[1] + "!=" + conditionValue);
+								logger.info(keyValueArray[1] + "!=" + conditionValue);
 								check = false;
 								break;
 							}
@@ -728,14 +732,14 @@ public class MailConnection implements Connection {
 						//一致する場合は削除
 						writeclf(pop3Ps, "DELE " + msg.getNum());
 						value = pop3Br.readLine();
-						System.out.println(value); //+OK
+						logger.info(value); //+OK
 						if (value.startsWith("+OK")) {
 							deleteCount++;
 						}
 					}
 				}
 			}
-			System.out.println("削除件数" + deleteCount);
+			logger.info("削除件数" + deleteCount);
 		} catch (IOException e) {
 			throw new SQLException(e);
 		} catch (Exception e) {
@@ -753,7 +757,7 @@ public class MailConnection implements Connection {
 	 * @throws SQLException
 	 */
 	public List<Map<String, String>> select(String box, String json) throws SQLException {
-		System.out.println(json);
+		logger.info(json);
 		//接続開始後の最初の一回はboxのtopを実施してmap(box名,mailNoList)を保持する。
 		//Connection接続中はdelete,selectはこのデータを参照する。
 		List<Map<String, String>> resultList = null;
@@ -765,17 +769,17 @@ public class MailConnection implements Connection {
 				pop3Br = new BufferedReader(new InputStreamReader(
 						pop3Socket.getInputStream()));
 				value = pop3Br.readLine();
-				System.out.println(value);
+				logger.info(value);
 				writeclf(pop3Ps, "USER " + info.getProperty("pop3.user"));
 				value = pop3Br.readLine();
-				System.out.println(value);
+				logger.info(value);
 				writeclf(pop3Ps, "PASS " + info.getProperty("pop3.pass"));
 				value = pop3Br.readLine();
-				System.out.println(value);
+				logger.info(value);
 				boxMap.clear();
 				writeclf(pop3Ps, "UIDL");
 				value = pop3Br.readLine();
-				System.out.println(value); //+OK
+				logger.info(value); //+OK
 				List<Msg> msgList = new ArrayList<>();
 				while (!".".equals(value = pop3Br.readLine())) {
 					String[] values = value.split(" ");
@@ -808,7 +812,7 @@ public class MailConnection implements Connection {
 					}
 				}
 			}
-			System.out.println(boxMap);
+			logger.info(boxMap.toString());
 			if (boxMap.containsKey(box)) {
 				String[] keyValues = json.split(",");
 				//boxが存在する
@@ -848,7 +852,7 @@ public class MailConnection implements Connection {
 			}
 			if (resultList == null) {
 				//存在しない
-				System.out.println("データなし");
+				logger.info("データなし");
 				resultList = Collections.emptyList();
 			}
 		} catch (IOException e) {
@@ -877,7 +881,7 @@ public class MailConnection implements Connection {
 	 * @throws Exception
 	 */
 	private Socket createSocket(String host, int port, boolean ssl) throws Exception {
-		System.out.println("createSocket");
+		logger.info("createSocket");
 		Socket socket = null;
 		if (ssl) {
 			// SSLソケットを生成する
