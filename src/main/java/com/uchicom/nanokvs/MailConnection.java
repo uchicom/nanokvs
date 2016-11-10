@@ -58,7 +58,8 @@ public class MailConnection implements Connection {
 	private int smtpPort = 25;
 	private String smtpDb;
 	private Socket smtpSocket;
-	private Map<String, List<Integer>> boxMap = new HashMap<>();
+	/** key:box, value:メッセージ番号のリスト */
+	private Map<String, List<Msg>> boxMap = new HashMap<>();
 
 	/**
 	 * コンストラクタ.
@@ -621,8 +622,6 @@ public class MailConnection implements Connection {
 			}
 			writeclf(ps, ".");
 			value = br.readLine();
-			writeclf(ps, "QUIT");
-			value = br.readLine();
 			System.out.println(value);
 		} catch (IOException e) {
 			throw new SQLException(e);
@@ -668,15 +667,19 @@ public class MailConnection implements Connection {
 			writeclf(ps, "PASS " + info.getProperty("pop3.pass"));
 			value = br.readLine();
 			System.out.println(value);
-			writeclf(ps, "STAT");
+			writeclf(ps, "UIDL");
 			value = br.readLine();
-			System.out.println(value);
-			int max = Integer.parseInt(value.split(" ")[1]);
+			System.out.println(value); //+OK
+			List<Msg> msgList = new ArrayList<>();
+			while (!".".equals(value = br.readLine())) {
+				String[] values = value.split(" ");
+				msgList.add(new Msg(Integer.parseInt(value.split(" ")[0]), values[1]));
+			}
 
-			if (max > 0) {
-				//存在する
-				for (int i = 0; i < max; i++) {
-					writeclf(ps, "TOP " + (i + 1) + " 0");
+			if (!msgList.isEmpty()) {
+				//headerを調べてboxを抽出
+				for (Msg msg : msgList) {
+					writeclf(ps, "TOP " + msg.getNum() + " 0");
 					while (!(value = br.readLine()).equals(".")) {
 						if (value.startsWith("Subject: ")) {
 							String[] keyBoxs = value.substring(9).split(" ", 2);
@@ -687,14 +690,14 @@ public class MailConnection implements Connection {
 								if (!pop3Db.equals(keyBoxs[1])) continue;
 							}
 							String keyBox = keyBoxs[0];
-							List<Integer> objectList = null;
+							List<Msg> objectList = null;
 							if (boxMap.containsKey(keyBox)) {
 								objectList = boxMap.get(keyBox);
 							} else {
 								objectList = new ArrayList<>();
 								boxMap.put(keyBox, objectList);
 							}
-							objectList.add((i + 1));
+							objectList.add(msg);
 						}
 					}
 				}
@@ -702,10 +705,10 @@ public class MailConnection implements Connection {
 				if (boxMap.containsKey(box)) {
 					String[] keyValues = json.split(",");
 					//boxが存在する
-					List<Integer> retrList = boxMap.get(box);
+					List<Msg> retrList = boxMap.get(box);
 					resultList = new ArrayList<>(retrList.size());
-					for (Integer i : retrList) {
-						writeclf(ps, "RETR " + i);
+					for (Msg msg : retrList) {
+						writeclf(ps, "RETR " + msg.getNum());
 						boolean body = false;
 						Map<String, String> keyValueMap = new LinkedHashMap<>();
 						while (!".".equals(value = br.readLine())) {
@@ -742,8 +745,6 @@ public class MailConnection implements Connection {
 				System.out.println("データなし");
 				resultList = Collections.emptyList();
 			}
-			writeclf(ps, "QUIT");
-			value = br.readLine();
 		} catch (IOException e) {
 			throw new SQLException(e);
 		} catch (Exception e) {
