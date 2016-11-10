@@ -212,7 +212,7 @@ public class MailConnection implements Connection {
 	 */
 	@Override
 	public boolean isClosed() throws SQLException {
-		throw new UnsupportedOperationException();
+		return (pop3Socket == null || pop3Socket.isClosed()) && (smtpSocket == null || smtpSocket.isClosed());
 	}
 
 	/* (非 Javadoc)
