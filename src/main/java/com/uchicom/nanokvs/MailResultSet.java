@@ -242,7 +242,7 @@ public class MailResultSet implements ResultSet {
 	 */
 	@Override
 	public boolean getBoolean(String paramString) throws SQLException {
-		return Boolean.getBoolean(currentMap.get(paramString));
+		return Boolean.parseBoolean(currentMap.get(paramString));
 	}
 
 	/* (非 Javadoc)
