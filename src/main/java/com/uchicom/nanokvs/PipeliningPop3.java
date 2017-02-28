@@ -35,8 +35,9 @@ public class PipeliningPop3 extends Pop3{
 	 * @return
 	 * @throws SQLException
 	 */
-	public int delete(String box, String json) throws SQLException {
+	public synchronized int delete(String box, String json) throws SQLException {
 		logger.info("delete " + box + " " + json);
+		long start = System.currentTimeMillis();
 		int deleteCount = 0;
 		int result = 0;
 		//削除
@@ -57,6 +58,11 @@ public class PipeliningPop3 extends Pop3{
 				String[] keyValues = json.split(",");
 				//boxが存在する
 				List<Msg> retrList = boxMap.get(box);
+				for (Msg msg : retrList) {
+					ConnectionUtil.writecl(pop3Ps, "RETR " + msg.getNum());
+				}
+				System.out.println("RETR" + (System.currentTimeMillis() - start) / 1000d + "[s]" );
+
 				for (Msg msg : retrList) {
 					Map<String, String> keyValueMap = createKeyValueMap(msg.getNum());
 					if (ConnectionUtil.equalsKeyValues(keyValues, keyValueMap)) {
@@ -91,7 +97,7 @@ public class PipeliningPop3 extends Pop3{
 	 * @return
 	 * @throws SQLException
 	 */
-	public List<Map<String, String>> select(String box, String json) throws SQLException {
+	public synchronized List<Map<String, String>> select(String box, String json) throws SQLException {
 		logger.info(json);
 		long start = System.currentTimeMillis();
 		List<Map<String, String>> resultList = null;
@@ -145,7 +151,7 @@ public class PipeliningPop3 extends Pop3{
 	 * POP3接続の初期化.
 	 * @throws Exception
 	 */
-	public void initPop3() throws Exception {
+	public synchronized void initPop3() throws Exception {
 		long start = System.currentTimeMillis();
 		pop3Socket = ConnectionUtil.createSocket(pop3Host, pop3Port, "true".equals(info.getProperty("pop3.ssl")));
 		System.out.println("CONNECT" + (System.currentTimeMillis() - start) / 1000d + "[s]" );
@@ -170,7 +176,7 @@ public class PipeliningPop3 extends Pop3{
 	 * POP3のログイン処理.
 	 * @throws IOException
 	 */
-	public void pop3Login() throws IOException {
+	public synchronized void pop3Login() throws IOException {
 		ConnectionUtil.writecl(pop3Ps, "USER " + info.getProperty("pop3.user"));
 		ConnectionUtil.writeclf(pop3Ps, "PASS " + info.getProperty("pop3.pass"));
 		String value = pop3Br.readLine();
@@ -184,7 +190,7 @@ public class PipeliningPop3 extends Pop3{
 	 * @return
 	 * @throws IOException
 	 */
-	public List<Msg> createMsgList() throws IOException {
+	public synchronized List<Msg> createMsgList() throws IOException {
 		ConnectionUtil.writeclf(pop3Ps, "UIDL");
 
 		String value = pop3Br.readLine();
@@ -205,7 +211,7 @@ public class PipeliningPop3 extends Pop3{
 	 * @param msgList
 	 * @throws IOException
 	 */
-	public void createBoxMap(List<Msg> msgList) throws IOException {
+	public synchronized void createBoxMap(List<Msg> msgList) throws IOException {
 		//headerを調べてboxを抽出
 		for (Msg msg : msgList) {
 			ConnectionUtil.writecl(pop3Ps, "TOP " + msg.getNum() + " 0");
@@ -248,7 +254,7 @@ public class PipeliningPop3 extends Pop3{
 	 * @return
 	 * @throws IOException
 	 */
-	public Map<String, String> createKeyValueMap(Integer msgNum) throws IOException {
+	public synchronized Map<String, String> createKeyValueMap(Integer msgNum) throws IOException {
 
 		boolean body = false;
 		String value = null;

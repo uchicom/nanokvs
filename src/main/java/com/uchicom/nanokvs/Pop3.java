@@ -3,12 +3,8 @@ package com.uchicom.nanokvs;
 
 import java.io.BufferedReader;
 import java.io.Closeable;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.ObjectInputStream;
 import java.io.PrintStream;
 import java.net.Socket;
 import java.sql.SQLException;
@@ -59,23 +55,23 @@ public class Pop3 implements Closeable {
 			}
 		}
 		this.info = info;
-		if (info.containsKey("uidl.cache")) {
-			File cacheFile = new File(info.getProperty("uidl.cashe"));
-			if (cacheFile.exists()) {
-				try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(cacheFile))) {
-					boxUidlMap = (Map<String ,String>)ois.readObject();
-				} catch (FileNotFoundException e) {
-					e.printStackTrace();
-				} catch (IOException e) {
-					e.printStackTrace();
-				} catch (ClassNotFoundException e) {
-					e.printStackTrace();
-				}
-				if (boxUidlMap == null) {
-					boxUidlMap = new HashMap<>();
-				}
-			}
-		}
+//		if (info.containsKey("uidl.cache")) {
+//			File cacheFile = new File(info.getProperty("uidl.cashe"));
+//			if (cacheFile.exists()) {
+//				try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(cacheFile))) {
+//					boxUidlMap = (Map<String ,String>)ois.readObject();
+//				} catch (FileNotFoundException e) {
+//					e.printStackTrace();
+//				} catch (IOException e) {
+//					e.printStackTrace();
+//				} catch (ClassNotFoundException e) {
+//					e.printStackTrace();
+//				}
+//				if (boxUidlMap == null) {
+//					boxUidlMap = new HashMap<>();
+//				}
+//			}
+//		}
 	}
 	/**
 	 * 削除処理.
@@ -85,7 +81,7 @@ public class Pop3 implements Closeable {
 	 * @return
 	 * @throws SQLException
 	 */
-	protected int delete(String box, String json) throws SQLException {
+	protected synchronized int delete(String box, String json) throws SQLException {
 		logger.info("delete " + box + " " + json);
 		int deleteCount = 0;
 		//削除
@@ -136,7 +132,7 @@ public class Pop3 implements Closeable {
 	 * @return
 	 * @throws SQLException
 	 */
-	protected List<Map<String, String>> select(String box, String json) throws SQLException {
+	protected synchronized List<Map<String, String>> select(String box, String json) throws SQLException {
 		logger.info(json);
 		List<Map<String, String>> resultList = null;
 		try {
@@ -179,7 +175,7 @@ public class Pop3 implements Closeable {
 	 * POP3接続の初期化.
 	 * @throws Exception
 	 */
-	protected void initPop3() throws Exception {
+	protected synchronized void initPop3() throws Exception {
 		pop3Socket = ConnectionUtil.createSocket(pop3Host, pop3Port, "true".equals(info.getProperty("pop3.ssl")));
 		pop3Ps = new PrintStream(pop3Socket.getOutputStream());
 		pop3Br = new BufferedReader(new InputStreamReader(
@@ -194,7 +190,7 @@ public class Pop3 implements Closeable {
 	 * POP3のログイン処理.
 	 * @throws IOException
 	 */
-	protected void pop3Login() throws IOException {
+	protected synchronized void pop3Login() throws IOException {
 		ConnectionUtil.writeclf(pop3Ps, "USER " + info.getProperty("pop3.user"));
 		String value = pop3Br.readLine();
 		logger.info(value);
@@ -208,7 +204,7 @@ public class Pop3 implements Closeable {
 	 * @return
 	 * @throws IOException
 	 */
-	protected List<Msg> createMsgList() throws IOException {
+	protected synchronized List<Msg> createMsgList() throws IOException {
 		ConnectionUtil.writeclf(pop3Ps, "UIDL");
 
 		String value = pop3Br.readLine();
@@ -229,7 +225,7 @@ public class Pop3 implements Closeable {
 	 * @param msgList
 	 * @throws IOException
 	 */
-	protected void createBoxMap(List<Msg> msgList) throws IOException {
+	protected synchronized void createBoxMap(List<Msg> msgList) throws IOException {
 		//headerを調べてboxを抽出
 		for (Msg msg : msgList) {
 			ConnectionUtil.writeclf(pop3Ps, "TOP " + msg.getNum() + " 0");
@@ -268,7 +264,7 @@ public class Pop3 implements Closeable {
 	 * @return
 	 * @throws IOException
 	 */
-	public Map<String, String> createKeyValueMap(Integer msgNum) throws IOException {
+	public synchronized Map<String, String> createKeyValueMap(Integer msgNum) throws IOException {
 
 		boolean body = false;
 		String value = null;
@@ -294,7 +290,7 @@ public class Pop3 implements Closeable {
 	 * @see java.io.Closeable#close()
 	 */
 	@Override
-	public void close() throws IOException {
+	public synchronized void close() throws IOException {
 		if (pop3Socket != null) {
 			if (!pop3Socket.isOutputShutdown()) {
 				ConnectionUtil.writeclf(pop3Ps, "QUIT\r\n");
